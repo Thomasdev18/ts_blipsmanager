@@ -1,6 +1,4 @@
-Config = Config or {}
-
-Config.blips = {
+return {
     fuelStations = {
         label = 'Fuel Station',
         sprite = 361,
