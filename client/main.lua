@@ -1,24 +1,30 @@
 -- [[ Variables ]] --
 
-local Config = require 'config'
+local config = require 'config.client'
 local blips = {}
 
 -- [[ Functions ]] --
 
----@param message? table
+---@class message
+---@field action string
+---@field data any 
+
+---@param message message
 ---@param shouldShow? boolean
 local HandleNUI = function(message, shouldShow)
-    if shouldShow then SetNuiFocus(shouldShow, shouldShow) end
-    if message then SendNUIMessage(message) end
+    if not(type(message) == 'table') then return end
+    shouldShow = shouldShow or false
+    SetNuiFocus(shouldShow, shouldShow)
+    SendNUIMessage(message)
 end
 
 local getBlipEnabled = function(k)
-    if Config == nil or Config.blips == nil or Config.blips[k] == nil then
+    if config == nil or config.blips == nil or config.blips[k] == nil then
         return false
     end
 
     local kvp = GetResourceKvpString(tostring(k))
-    return (kvp ~= nil and kvp == 'true') or (not kvp and Config.blips[k].defaultEnabled)
+    return (kvp ~= nil and kvp == 'true') or (not kvp and config.blips[k].defaultEnabled)
 end
 
 local getIndividualBlipEnabled = function(category, index)
@@ -40,35 +46,40 @@ local createBlip = function(coords, sprite, display, scale, color, label)
     return blip
 end
 
-local refreshBlips = function()
-    Wait(500)
-    for _, blipList in pairs(blips) do
-        for _, blip in pairs(blipList) do
-            RemoveBlip(blip)
+local refreshBlips = function ()
+    SetTimeout(1000, function()
+        for _, blipList in pairs(blips) do
+            for _, blip in pairs(blipList) do
+                RemoveBlip(blip)
+            end
         end
-    end
-    blips = {}
+        blips = {}
 
-    for k, v in pairs(Config.blips) do
-        blips[k] = {}
-        local categoryEnabled = getBlipEnabled(k)
+        for k, v in pairs(config.blips) do
+            blips[k] = {}
+            local categoryEnabled = getBlipEnabled(k)
 
-        for index, coords in pairs(v.locations) do
-            local individualEnabled = getIndividualBlipEnabled(k, index)
+            for index, coords in pairs(v.locations) do
+                local individualEnabled = getIndividualBlipEnabled(k, index)
 
-            if individualEnabled then
-                blips[k][index] = createBlip(coords, v.sprite, v.display, v.scale, v.color, v.label .. ' ' .. tostring(index))
-            elseif categoryEnabled then
-                blips[k][index] = createBlip(coords, v.sprite, v.display, v.scale, v.color, v.label .. ' ' .. tostring(index))
-            else
-                if blips[k][index] then
-                    RemoveBlip(blips[k][index])
-                    blips[k][index] = nil
+                if individualEnabled then
+                    blips[k][index] = createBlip(coords, v.sprite, v.display, v.scale, v.color, v.label .. ' ' .. tostring(index))
+                elseif categoryEnabled then
+                    blips[k][index] = createBlip(coords, v.sprite, v.display, v.scale, v.color, v.label .. ' ' .. tostring(index))
+                else
+                    if blips[k][index] then
+                        RemoveBlip(blips[k][index])
+                        blips[k][index] = nil
+                    end
                 end
             end
         end
-    end
+    end)
 end
+
+CreateThread(refreshBlips)
+
+-- [[ NUICallbacks ]] --
 
 RegisterNUICallback('blipVisibility', function(data)
     SetResourceKvp(data.id, tostring(data.enable))
@@ -76,14 +87,16 @@ RegisterNUICallback('blipVisibility', function(data)
 end)
 
 RegisterNuiCallback('hideFrame', function(data, cb)
-    HandleNUI({action = data.name, data = false}, false)
+    HandleNUI({action = data.name, data = false})
     cb(true)
 end)
+
+-- [[ Commands ]] --
 
 RegisterCommand('blips', function()
     local categorizedBlips = {}
 
-    for k, v in pairs(Config.blips) do
+    for k, v in pairs(config.blips) do
         if not categorizedBlips[k] then
             categorizedBlips[k] = {
                 label = v.label,
@@ -107,5 +120,3 @@ RegisterCommand('blips', function()
     HandleNUI({action = 'blipsMenu', data = categorizedBlips})
     HandleNUI({action = 'setVisibleMenu', data = true}, true)
 end)
-
-CreateThread(refreshBlips)
