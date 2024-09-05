@@ -10,7 +10,7 @@ shared_scripts {
 }
 
 client_scripts {
-    'client/**/*',
+    'client/**/*.lua',
 }
 
 ui_page 'web/build/index.html'
