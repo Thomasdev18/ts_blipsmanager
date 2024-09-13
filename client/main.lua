@@ -1,9 +1,5 @@
--- [[ Variables ]] --
-
 local config = require 'config.client'
 local blips = {}
-
--- [[ Functions ]] --
 
 ---@class message
 ---@field action string
@@ -79,8 +75,6 @@ end
 
 CreateThread(refreshBlips)
 
--- [[ NUICallbacks ]] --
-
 RegisterNUICallback('blipVisibility', function(data)
     SetResourceKvp(data.id, tostring(data.enable))
     refreshBlips()
@@ -90,8 +84,6 @@ RegisterNuiCallback('hideFrame', function(data, cb)
     HandleNUI({action = data.name, data = false})
     cb(true)
 end)
-
--- [[ Commands ]] --
 
 RegisterCommand('blips', function()
     local categorizedBlips = {}
