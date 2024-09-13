@@ -1,22 +1,40 @@
+-- [[ Variables ]] --
+
+local config = require 'config.client'
 local blips = {}
 
-getBlipEnabled = function(k)
-    if Config == nil or Config.blips == nil or Config.blips[k] == nil then
+-- [[ Functions ]] --
+
+---@class message
+---@field action string
+---@field data any 
+
+---@param message message
+---@param shouldShow? boolean
+local HandleNUI = function(message, shouldShow)
+    if not(type(message) == 'table') then return end
+    shouldShow = shouldShow or false
+    SetNuiFocus(shouldShow, shouldShow)
+    SendNUIMessage(message)
+end
+
+local getBlipEnabled = function(k)
+    if config == nil or config.blips == nil or config.blips[k] == nil then
         return false
     end
 
     local kvp = GetResourceKvpString(tostring(k))
-    return (kvp ~= nil and kvp == 'true') or (not kvp and Config.blips[k].defaultEnabled)
+    return (kvp ~= nil and kvp == 'true') or (not kvp and config.blips[k].defaultEnabled)
 end
 
-getIndividualBlipEnabled = function(category, index)
+local getIndividualBlipEnabled = function(category, index)
     local key = category .. '_' .. tostring(index)
     local kvp = GetResourceKvpString(key)
     return (kvp ~= nil and kvp == 'true')
 end
 
-createBlip = function(coords, sprite, display, scale, color, label)
-    local blip = AddBlipForCoord(coords)
+local createBlip = function(coords, sprite, display, scale, color, label)
+    local blip = AddBlipForCoord(coords.x, coords.y, coords.z)
     SetBlipSprite(blip, sprite)
     SetBlipDisplay(blip, display)
     SetBlipAsShortRange(blip, true)
@@ -28,10 +46,57 @@ createBlip = function(coords, sprite, display, scale, color, label)
     return blip
 end
 
+local refreshBlips = function ()
+    SetTimeout(1000, function()
+        for _, blipList in pairs(blips) do
+            for _, blip in pairs(blipList) do
+                RemoveBlip(blip)
+            end
+        end
+        blips = {}
+
+        for k, v in pairs(config.blips) do
+            blips[k] = {}
+            local categoryEnabled = getBlipEnabled(k)
+
+            for index, coords in pairs(v.locations) do
+                local individualEnabled = getIndividualBlipEnabled(k, index)
+
+                if individualEnabled then
+                    blips[k][index] = createBlip(coords, v.sprite, v.display, v.scale, v.color, v.label .. ' ' .. tostring(index))
+                elseif categoryEnabled then
+                    blips[k][index] = createBlip(coords, v.sprite, v.display, v.scale, v.color, v.label .. ' ' .. tostring(index))
+                else
+                    if blips[k][index] then
+                        RemoveBlip(blips[k][index])
+                        blips[k][index] = nil
+                    end
+                end
+            end
+        end
+    end)
+end
+
+CreateThread(refreshBlips)
+
+-- [[ NUICallbacks ]] --
+
+RegisterNUICallback('blipVisibility', function(data)
+    SetResourceKvp(data.id, tostring(data.enable))
+    refreshBlips()
+end)
+
+RegisterNuiCallback('hideFrame', function(data, cb)
+    HandleNUI({action = data.name, data = false})
+    cb(true)
+end)
+
+-- [[ Commands ]] --
+
 RegisterCommand('blips', function()
     local categorizedBlips = {}
 
-    for k, v in pairs(Config.blips) do
+    for k, v in pairs(config.blips) do
         if not categorizedBlips[k] then
             categorizedBlips[k] = {
                 label = v.label,
@@ -41,7 +106,7 @@ RegisterCommand('blips', function()
             }
         end
 
-        for i, location in ipairs(v.locations) do
+        for i, _ in ipairs(v.locations) do
             local blipId = k .. '_' .. tostring(i)
             local individualEnabled = getIndividualBlipEnabled(k, i)
 
@@ -52,47 +117,6 @@ RegisterCommand('blips', function()
             })
         end
     end
-
-    SendNUIMessage({
-        action = 'blipsMenu',
-        data = categorizedBlips
-    })
-    ShowNUI('setVisibleMenu', true)
+    HandleNUI({action = 'blipsMenu', data = categorizedBlips})
+    HandleNUI({action = 'setVisibleMenu', data = true}, true)
 end)
-
-RegisterNUICallback('blipVisibility', function(data)
-    SetResourceKvp(data.id, tostring(data.enable))
-    refreshBlips()
-end)
-
-refreshBlips = function()
-    Wait(500)
-    for _, blipList in pairs(blips) do
-        for _, blip in pairs(blipList) do 
-            RemoveBlip(blip) 
-        end
-    end
-    blips = {}
-
-    for k, v in pairs(Config.blips) do
-        blips[k] = {}
-        local categoryEnabled = getBlipEnabled(k)
-
-        for index, coords in pairs(v.locations) do
-            local individualEnabled = getIndividualBlipEnabled(k, index)
-            
-            if individualEnabled then
-                blips[k][index] = createBlip(coords, v.sprite, v.display, v.scale, v.color, v.label .. ' ' .. tostring(index))
-            elseif categoryEnabled then
-                blips[k][index] = createBlip(coords, v.sprite, v.display, v.scale, v.color, v.label .. ' ' .. tostring(index))
-            else
-                if blips[k][index] then
-                    RemoveBlip(blips[k][index])
-                    blips[k][index] = nil
-                end
-            end
-        end
-    end
-end
-
-CreateThread(refreshBlips)
