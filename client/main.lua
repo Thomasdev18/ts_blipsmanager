@@ -1,9 +1,9 @@
 local config = require 'config.client'
 local blips = {}
 
----@class message
----@field action string
----@field data any 
+---@class Message
+---@field Action: string
+---@field Data: any 
 
 ---@param message message
 ---@param shouldShow? boolean
